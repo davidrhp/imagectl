@@ -1,0 +1,121 @@
+name: Rust Cross-Platform Builds
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to build from'
+        required: true
+        default: 'master'
+
+      target:
+        description: 'Target architecture to build for'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all                 # Build all platforms (default)
+          - x86_64-apple-darwin # macOS Intel
+          - aarch64-apple-darwin # macOS ARM
+          - x86_64-pc-windows-gnu # Windows Intel GNU
+          - aarch64-pc-windows-msvc # Windows ARM MSVC
+          - x86_64-unknown-linux-gnu # Linux Intel
+          - aarch64-unknown-linux-gnu # Linux ARM
+
+jobs:
+  build:
+    strategy:
+      # Define separate operating system and target lists
+      matrix:
+        include:
+          # macOS targets
+          - os: macos-latest
+            target: x86_64-apple-darwin
+          - os: macos-latest
+            target: aarch64-apple-darwin
+
+          # Windows targets
+          - os: windows-latest
+            target: x86_64-pc-windows-gnu
+          - os: windows-latest
+            target: aarch64-pc-windows-msvc
+
+          # Linux targets
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+
+      fail-fast: false
+      max-parallel: 6
+
+    runs-on: ${{ matrix.os }}
+
+
+    steps:
+      - name: Check Target Compatibility
+        id: gatekeeper
+        run: |
+          echo "Selected input target: ${{ github.event.inputs.target }}"
+          echo "Current job matrix target: ${{ matrix.target }}"
+
+          if [[ "${{ github.event.inputs.target }}" != "all" && "${{ github.event.inputs.target }}" != "${{ matrix.target }}" ]]; then
+            echo "Skipping job because targets are incompatible."
+            echo "::set-output name=status::skip"
+            exit 0
+          else
+            echo "Targets are compatible, continuing job."
+            echo "::set-output name=status::continue"
+          fi
+
+        shell: bash
+
+# OS-specific step for installing libdav1d
+      - name: Install libdav1d
+        if: steps.gatekeeper.outputs.status == 'continue'
+        run: |
+          if [[ "${{ matrix.os }}" == "macos-latest" ]]; then
+            echo "Installing libdav1d on macOS with Homebrew..."
+            brew install dav1d
+          elif [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
+            echo "Installing libdav1d on Ubuntu with APT..."
+            sudo apt-get update
+            sudo apt-get install -y libdav1d-dev
+          elif [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            echo "Installing libdav1d on Windows with Chocolatey..."
+            choco install libdav1d -y
+          else
+            echo "Unsupported OS for libdav1d installation!"
+            exit 1
+          fi
+        shell: bash
+
+
+      - name: Checkout code
+        if: steps.gatekeeper.outputs.status == 'continue'
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.inputs.branch }}
+
+      - name: Install Rustup
+        if: steps.gatekeeper.outputs.status == 'continue'
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      - name: Add Target
+        if: steps.gatekeeper.outputs.status == 'continue'
+        run: rustup target add ${{ matrix.target }}
+
+      - name: Build for Specific Target
+        if: steps.gatekeeper.outputs.status == 'continue'
+        run: cargo build --release --target=${{ matrix.target }}
+
+      - name: Upload Artifact
+        if: ${{ success() && steps.gatekeeper.outputs.status == 'continue'}}
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ matrix.target }}-binary
+          path: target/${{ matrix.target }}/release/imagectl
