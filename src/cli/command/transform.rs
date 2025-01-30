@@ -1,10 +1,9 @@
 use crate::cli::Cli;
 use crate::image::{crop_center_landscape, crop_center_square, crop_left_square, crop_right_square, resize};
 use anyhow::{Context, Error};
-use clap::ArgGroup;
 use clap::{Args, ValueEnum};
 use image::imageops::FilterType;
-use image::{DynamicImage, GenericImageView, ImageFormat, ImageReader};
+use image::{DynamicImage, GenericImageView, ImageFormat, ImageReader, RgbImage};
 use indicatif::ProgressBar;
 use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
@@ -24,7 +23,7 @@ pub struct Transform {
     pub suffix: String,
 
     /// The minimum width that the generated images should have.
-    #[arg(short, long, default_value = "600")]
+    #[arg(short, long, default_value = "1200")]
     pub min_width: u32,
 
     /// Scale the generated images according to the `min_width` argument. If the image is larger
@@ -121,6 +120,21 @@ pub fn transform(_cli: &Cli, args: &Transform) -> anyhow::Result<()> {
 
             let mut generated_names = vec![];
             for (mut img_variant, suffix) in image_variants {
+
+                // Convert to RGB8 to remove the alpha channel
+                img_variant = match img_variant {
+                    DynamicImage::ImageRgba8(rgba_image) => {
+                        // Convert to RGB by discarding the alpha channel
+                        DynamicImage::from(RgbImage::from_fn(rgba_image.width(), rgba_image.height(), |x, y| {
+                            let pixel = rgba_image.get_pixel(x, y); // Read the RGBA pixel
+                            image::Rgb([pixel[0], pixel[1], pixel[2]]) // Keep only RGB channels
+                        }))
+                    }
+
+                    _ => img_variant, // Handle cases where the image is already RGB8 or another supported format
+                };
+
+                
                 // resize image
                 if args.scale {
                     let (width, height) = img_variant.dimensions();
@@ -134,13 +148,26 @@ pub fn transform(_cli: &Cli, args: &Transform) -> anyhow::Result<()> {
 
                 generated_names.push(generated_name)
             }
+            
+            let original_name = path.file_name()
+                .expect("file name to be present after it has been opened")
+                .to_string_lossy().to_string();
 
-            Ok::<Vec<String>, Error>(generated_names)
+            Ok::<(String, &Vec<AspectRatios>), Error>((original_name, &args.aspect_ratios))
         })
         .for_each(|result| {
             match result {
-                Ok(file_names) => bar.println(format!("[+] generated [{}]", file_names.join(", "))),
-                Err(err) => bar.println(format!("[+] failed to generate {:?}", err)),
+                Ok((file_name, aspect_ratios)) => {
+                    let ratios = aspect_ratios.iter()
+                        .map(|r| r.suffix())
+                        .collect::<Vec<_>>()
+                        .join(",");
+                    
+                    bar.println(format!("[+] generated {} with variants [{}]", file_name, ratios));
+                }
+                
+                Err(err) => 
+                    bar.println(format!("[+] failed to generate {:?}", err)),
             }
             bar.inc(1);
         });
@@ -150,7 +177,7 @@ pub fn transform(_cli: &Cli, args: &Transform) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn write_image(img: DynamicImage, format: ImageFormat, path: &PathBuf, suffix: String) -> Result<String, Error> {
+fn write_image(img: DynamicImage, format: ImageFormat, path: &Path, suffix: String) -> Result<String, Error> {
     // write image
 
     let extension = format.extensions_str()[0];
@@ -180,7 +207,7 @@ fn generate_image_variants(args: &Transform, img: DynamicImage) -> Vec<(DynamicI
         args.aspect_ratios
             .iter()
             .map(|ar| {
-                (ar.crop(&img), format!("{}_{}", args.suffix, ar.suffix().to_string()))
+                (ar.crop(&img), format!("{}_{}", args.suffix, ar.suffix()))
             })
             .collect()
     };
