@@ -83,8 +83,7 @@ jobs:
         if: runner.os == 'Windows' && steps.gatekeeper.outputs.status == 'continue'
         uses: lukka/run-vcpkg@v1
         with:
-          args: install dav1d
-
+          vcpkgArguments: install dav1d
 
       - name: Install Rustup
         if: steps.gatekeeper.outputs.status == 'continue'
