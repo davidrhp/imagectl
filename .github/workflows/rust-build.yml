@@ -73,11 +73,24 @@ jobs:
             sudo apt-get install -y libdav1d-dev
           elif [[ "${{ matrix.runner }}" =~ ^windows.* ]]; then
             echo "Installing dav1d on Windows with vcpkg..."
-            # Clone vcpkg
+          
+            # Check if the vcpkg directory already exists; if not, clone it.
+            if [ ! -d "C:/vcpkg" ]; then
             git clone https://github.com/microsoft/vcpkg.git C:/vcpkg
+            else
+            echo "vcpkg directory already exists, skipping clone."
+            fi
+          
             cd C:/vcpkg
-            # Bootstrap vcpkg
+          
+            # Bootstrap vcpkg if it hasn't been bootstrapped yet
+            if [ ! -f "vcpkg.exe" ]; then
+            echo "Bootstrapping vcpkg..."
             ./bootstrap-vcpkg.bat
+            else
+            echo "vcpkg already bootstrapped."
+            fi
+          
             # Install dav1d via vcpkg
             ./vcpkg.exe install dav1d
           else
