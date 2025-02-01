@@ -71,6 +71,8 @@ jobs:
             echo "Installing libdav1d on Ubuntu with APT..."
             sudo apt-get update
             sudo apt-get install -y libdav1d-dev
+          elif [[ "${{ matrix.runner }}" =~ ^windows.* ]]; then
+            echo "Skipping windows in this step"
           else
             echo "Unsupported OS for libdav1d installation!"
             exit 1
@@ -82,6 +84,7 @@ jobs:
         uses: lukka/run-vcpkg@v1
         with:
           args: install dav1d
+
 
       - name: Install Rustup
         if: steps.gatekeeper.outputs.status == 'continue'
