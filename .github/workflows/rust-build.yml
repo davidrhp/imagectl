@@ -117,8 +117,14 @@ jobs:
         with:
           ref: ${{ github.event.inputs.branch }}
 
+      - name: Build on Windows (MSVC)
+        if: runner.os == 'Windows' && steps.gatekeeper.outputs.status == 'continue'
+        env:
+          DAV1D_NO_PKG_CONFIG: "1"
+        run: cargo build --release --target=${{ matrix.target }}
+
       - name: Build
-        if: steps.gatekeeper.outputs.status == 'continue'
+        if: runner.os != 'Windows' && steps.gatekeeper.outputs.status == 'continue'
         run: cargo build --release --target=${{ matrix.target }}
 
       - name: Upload Artifact
