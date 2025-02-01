@@ -1,13 +1,16 @@
 name: Rust Cross-Platform Builds
 
 on:
+  push:
+    branches:
+      - main
+
   workflow_dispatch:
     inputs:
       branch:
         description: 'Branch to build from'
         required: true
         default: 'master'
-
       target:
         description: 'Target architecture to build for'
         required: true
@@ -15,42 +18,30 @@ on:
         type: choice
         options:
           - all                 # Build all platforms (default)
+          - x86_64-unknown-linux-gnu # Linux Intel
+          - aarch64-unknown-linux-gnu # Linux ARM
           - x86_64-apple-darwin # macOS Intel
           - aarch64-apple-darwin # macOS ARM
           - x86_64-pc-windows-gnu # Windows Intel GNU
-          - aarch64-pc-windows-msvc # Windows ARM MSVC
-          - x86_64-unknown-linux-gnu # Linux Intel
-          - aarch64-unknown-linux-gnu # Linux ARM
 
 jobs:
   build:
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+
     strategy:
-      # Define separate operating system and target lists
       matrix:
         include:
-          # macOS targets
-          - os: macos-latest
-            target: x86_64-apple-darwin
-          - os: macos-latest
-            target: aarch64-apple-darwin
-
-          # Windows targets
-          - os: windows-latest
-            target: x86_64-pc-windows-gnu
-          - os: windows-latest
-            target: aarch64-pc-windows-msvc
-
-          # Linux targets
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-          - os: ubuntu-latest
-            target: aarch64-unknown-linux-gnu
-
-      fail-fast: false
-      max-parallel: 6
-
-    runs-on: ${{ matrix.os }}
-
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-24.04-arm
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-latest
+          - target: aarch64-apple-darwin
+            runner: macos-latest
+          - target: x86_64-apple-darwin
+            runner: macos-13
+          - target: x86_64-pc-windows-gnu
+            runner: windows-latest
 
     steps:
       - name: Check Target Compatibility
@@ -70,32 +61,23 @@ jobs:
 
         shell: bash
 
-# OS-specific step for installing libdav1d
-      - name: Install libdav1d
+      - name: Install Dependencies
         if: steps.gatekeeper.outputs.status == 'continue'
         run: |
-          if [[ "${{ matrix.os }}" == "macos-latest" ]]; then
+          if [[ "${{ matrix.runner }}" =~ ^macos.* ]]; then
             echo "Installing libdav1d on macOS with Homebrew..."
             brew install dav1d
-          elif [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
+          elif [[ "${{ matrix.runner }}" =~ ^ubuntu.* ]]; then
             echo "Installing libdav1d on Ubuntu with APT..."
             sudo apt-get update
             sudo apt-get install -y libdav1d-dev
-          elif [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+          elif [[ "${{ matrix.runner }}" =~ ^windows.* ]]; then
             echo "Installing libdav1d on Windows with Chocolatey..."
             choco install libdav1d -y
           else
             echo "Unsupported OS for libdav1d installation!"
             exit 1
           fi
-        shell: bash
-
-
-      - name: Checkout code
-        if: steps.gatekeeper.outputs.status == 'continue'
-        uses: actions/checkout@v3
-        with:
-          ref: ${{ github.event.inputs.branch }}
 
       - name: Install Rustup
         if: steps.gatekeeper.outputs.status == 'continue'
@@ -109,13 +91,19 @@ jobs:
         if: steps.gatekeeper.outputs.status == 'continue'
         run: rustup target add ${{ matrix.target }}
 
-      - name: Build for Specific Target
+      - name: Checkout code
+        if: steps.gatekeeper.outputs.status == 'continue'
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.inputs.branch }}
+
+      - name: Build
         if: steps.gatekeeper.outputs.status == 'continue'
         run: cargo build --release --target=${{ matrix.target }}
 
       - name: Upload Artifact
-        if: ${{ success() && steps.gatekeeper.outputs.status == 'continue'}}
-        uses: actions/upload-artifact@v3
+        if: steps.gatekeeper.outputs.status == 'continue'
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.target }}-binary
           path: target/${{ matrix.target }}/release/imagectl
