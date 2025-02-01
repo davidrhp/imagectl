@@ -78,6 +78,8 @@ jobs:
             echo "Unsupported OS for libdav1d installation!"
             exit 1
           fi
+        shell: bash
+
 
       - name: Install Rustup
         if: steps.gatekeeper.outputs.status == 'continue'
