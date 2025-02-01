@@ -73,13 +73,13 @@ jobs:
             sudo apt-get install -y libdav1d-dev
           elif [[ "${{ matrix.runner }}" =~ ^windows.* ]]; then
             echo "Installing dav1d on Windows with vcpkg..."
-            REM Clone vcpkg
-            git clone https://github.com/microsoft/vcpkg.git C:\vcpkg
-            cd C:\vcpkg
-            REM Bootstrap vcpkg
-            .\bootstrap-vcpkg.bat
-            REM Install dav1d via vcpkg
-            .\vcpkg.exe install dav1d
+            # Clone vcpkg
+            git clone https://github.com/microsoft/vcpkg.git C:/vcpkg
+            cd C:/vcpkg
+            # Bootstrap vcpkg
+            ./bootstrap-vcpkg.bat
+            # Install dav1d via vcpkg
+            ./vcpkg.exe install dav1d
           else
             echo "Unsupported OS for libdav1d installation!"
             exit 1
