@@ -77,11 +77,11 @@ jobs:
           fi
         shell: bash
 
-      - name: Install dav1d on Windows via vcpkg-action
+      - name: Install dav1d on Windows via lukka/run-vcpkg
         if: runner.os == 'Windows' && steps.gatekeeper.outputs.status == 'continue'
-        uses: microsoft/vcpkg-action@v1
+        uses: lukka/run-vcpkg@v1
         with:
-          vcpkgPackage: dav1d
+          args: install dav1d
 
       - name: Install Rustup
         if: steps.gatekeeper.outputs.status == 'continue'
