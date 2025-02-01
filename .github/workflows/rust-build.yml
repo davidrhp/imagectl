@@ -22,7 +22,7 @@ on:
           - aarch64-unknown-linux-gnu # Linux ARM
           - x86_64-apple-darwin # macOS Intel
           - aarch64-apple-darwin # macOS ARM
-          - x86_64-pc-windows-gnu # Windows Intel GNU
+          - x86_64-pc-windows-msvc # Windows Intel GNU
 
 jobs:
   build:
